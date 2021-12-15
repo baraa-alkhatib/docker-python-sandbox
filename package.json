@@ -23,17 +23,17 @@
   },
   "homepage": "https://github.com/christophetd/docker-python-sandbox-v2#readme",
   "dependencies": {
-    "async": "^2.0.0-rc.3",
+    "async": "^3.2.2",
     "babel-core": "^6.26.0",
     "chai": "^4.1.2",
-    "dockerode": "^2.2.10",
-    "fs-extra": "^0.26.7",
-    "lodash": "^4.8.2",
+    "dockerode": "^3.3.1",
+    "fs-extra": "^10.0.0",
+    "lodash": "^4.17.21",
     "mocha": "^4.0.1",
     "proxyquire": "^1.8.0",
-    "request": "^2.70.0",
+    "request": "^2.88.2",
     "sinon": "^4.1.2",
-    "uuid": "^3.0.0",
+    "uuid": "^8.3.2",
     "winston": "^2.2.0"
   },
   "devDependencies": {

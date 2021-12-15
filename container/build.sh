@@ -1,5 +1,5 @@
 #!/bin/bash
-IMAGE_NAME="christophetd/docker_sandbox"
+IMAGE_NAME="professphysics/docker-sandbox"
 
 if [ $# = 1 ]; then
 	IMAGE_NAME="$1"

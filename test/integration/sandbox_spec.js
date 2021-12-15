@@ -12,7 +12,7 @@ describe("The Sandbox", () => {
   
   beforeEach(done => {
     sandbox = new Sandbox({ poolSize })
-    sandbox.createPool(err => {
+    sandbox.initialize(err => {
       if (err) throw err;
       done()
     })

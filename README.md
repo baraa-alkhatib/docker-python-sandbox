@@ -14,7 +14,7 @@ This section describes how to use the library from your NodeJS application.
 
 - [Install Docker](https://docs.docker.com/engine/installation/)
 - Install the library: `npm install --save docker-python-sandbox`
-- Pull the docker image used by the library: `docker pull christophetd/docker-sandbox`
+- Pull the docker image used by the library: `docker pull professphysics/docker-sandbox`
 
 ## How it works
 

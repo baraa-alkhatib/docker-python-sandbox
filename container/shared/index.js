@@ -10,6 +10,10 @@ var port = process.env.PORT || 3000;
 
 app.use(bodyParser.json());
 
+app.get('/', function(req, res) {
+	res.status(200).send('Container connected!');
+})
+
 app.post('/', function (req, res) {
     
     res.setHeader('Content-Type', 'application/json');
@@ -20,13 +24,34 @@ app.post('/', function (req, res) {
   	}
   	else {
   	    res.status(200);
+
+			var entryFileName = 'code.py';
     
-  		// Write code to file
-  		fs.writeFileSync('./code.py', req.body.code);
-  		
-		var executor = (req.body.v3 === true) ? "python3" : "python"
-  		var job = child_process.spawn(executor, ["-u", "./code.py"], { cwd: __dirname })
+			if (_.isArray(req.body.code)) {
+				const codeArr = req.body.code;
+				codeArr.forEach(c => {
+					fs.writeFileSync(`./${c.fileName}`, c.code);
+				});
+
+				entryFileName = codeArr[0].fileName;
+
+				if (entryFileName.endsWith('evaluate.py')) {
+					fs.appendFileSync(`./${entryFileName}`, `\n
+if __name__ == '__main__':
+    unittest.main()
+					`)
+				}
+			} else {
+				// Write code to file
+				fs.writeFileSync(`./${entryFileName}`, req.body.code);
+			}
+
+
+			var executor = (req.body.v3 === true) ? "python3" : "python";
+
+			var job = child_process.spawn(executor, ["-u", `${entryFileName}`], { cwd: __dirname });
   		var output = {stdout: '', stderr: '', combined: ''};
+
   		
   		job.stdout.on('data', function (data) {
   		    output.stdout += data;
@@ -38,6 +63,8 @@ app.post('/', function (req, res) {
   		    output.combined += data;
   		})
   	
+			job.on('error', console.error);
+
     	// Timeout logic
   		var timeoutCheck = setTimeout(function () {
   		    console.error("Process timed out. Killing")

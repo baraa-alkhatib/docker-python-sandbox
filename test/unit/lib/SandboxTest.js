@@ -143,7 +143,7 @@ describe('Sandbox', () => {
     it('should call this.manager once with expected params', () => {
       let cb = sandbox.stub()
       ourSandbox.manager.initialize = sandbox.stub()
-      ourSandbox.createPool(cb)
+      ourSandbox.initialize(cb)
 
       expect(ourSandbox.manager.initialize.callCount).to.deep.equal(1)
       expect(ourSandbox.manager.initialize.args[0][0]).to.deep.equal(sandboxOptions.poolSize)
