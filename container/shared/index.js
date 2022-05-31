@@ -2,14 +2,14 @@ var express = require("express");
 var bodyParser = require("body-parser");
 var fs = require("fs-extra");
 
+var JSZip = require("jszip");
+
 var libre = require("libreoffice-convert");
 
 libre.convertAsync = require("util").promisify(libre.convert);
 
 var child_process = require("child_process");
 var _ = require("underscore");
-
-var FormData = require("form-data");
 
 var path = require("path");
 
@@ -20,7 +20,7 @@ var port = process.env.PORT || 3000;
 var multer = require("multer");
 
 var storage = multer.diskStorage({
-  destination: path.join(__dirname, "/uploads"),
+  destination: path.join(__dirname, "/uploads/"),
   filename: function (req, file, cb) {
     // append extension
     cb(null, Date.now() + path.extname(file.originalname));
@@ -29,6 +29,7 @@ var storage = multer.diskStorage({
 
 var upload = multer({
   storage: storage,
+  dest: path.join(__dirname, "/uploads/"),
 });
 
 app.use(bodyParser.json());
@@ -187,24 +188,32 @@ app.post("/convert-document-to-images", upload.single("file"), function (req, re
         if (result.isError) {
           res.status(500).json(result);
         } else {
+          const zip = new JSZip();
+
           // read the saved (jpg) image files
           const fileNames = await fs.promises.readdir(
-            path.join(__dirname, "/images"),
+            path.join(__dirname, "images"),
             ["**.jpg"]
           );
 
-          const form = new FormData();
-
           fileNames.forEach(function (filename) {
-            filepath = path.join(__dirname, "/images") + "/" + filename;
+            const filepath = path.join(__dirname, "images", filename);
 
-            form.append(filename, fs.createReadStream(filepath));
+            const data = fs.readFileSync(filepath);
+
+            // append files to zip
+            zip.file(filename, data);
           });
 
-          res
-            .setHeader("Content-Type", "multipart/formdata")
-            .status(200)
-            .send(form);
+          zip.generateAsync({ type: "base64" }).then((base64) => {
+            let zip = Buffer.from(base64, "base64");
+            res.writeHead(200, {
+              "Content-Type": "application/zip",
+              "Content-disposition": `attachment; filename=images.zip`,
+            });
+
+            res.end(zip);
+          });
         }
       } catch (err) {
         console.error("err on close: ", err);

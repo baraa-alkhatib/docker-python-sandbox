@@ -41,6 +41,10 @@ RUN pip install pdf2image
 # Copy src files
 COPY ./shared .
 
+# Change the owner of the app direcotry (run recursively)
+RUN ["chown", "-R", "sandboxuser", "/usr/src/app"]
+RUN ["chmod", "-R", "u+rwx", "/usr/src/app"]
+
 # Run npm install
 RUN npm i
 
