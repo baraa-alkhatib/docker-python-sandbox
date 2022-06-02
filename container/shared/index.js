@@ -117,142 +117,157 @@ app.post("/execute-python", function (req, res) {
   }
 });
 
-app.post("/convert-document-to-images", upload.single("file"), function (req, res) {
-  // check if request has an uploaded file
-  if (!req.file) {
-    return res.status(400).end(
-      JSON.stringify({
-        error: "file required",
-      })
-    );
-  }
-
-  const uploadDir = path.join(__dirname, "/uploads");
-
-  // create images directory
-  const imagesDir = path.join(__dirname, "/images");
-
-  if (!fs.existsSync(imagesDir)) {
-    fs.mkdirSync(imagesDir);
-  }
-  // cleanup code
-  res.on("finish", function () {
-    try {
-      fs.emptyDirSync(uploadDir);
-      fs.emptyDirSync(imagesDir);
-    } catch (err) {
-      console.error(err);
+app.post(
+  "/convert-document-to-images",
+  upload.single("file"),
+  async function (req, res) {
+    // check if request has an uploaded file
+    if (!req.file) {
+      return res.status(400).end(
+        JSON.stringify({
+          error: "file required",
+        })
+      );
     }
-  });
 
-  // Timeout logic
-  var timeoutCheck;
+    const uploadDir = path.join(__dirname, "/uploads");
 
-  if (req.body.timeoutMs) {
-    timeoutCheck = setTimeout(function () {
-      console.error("Process timed out. Killing");
+    // create images directory
+    const imagesDir = path.join(__dirname, "/images");
 
-      job.kill("SIGKILL");
-
-      var result = _.extend(output, {
-        timedOut: true,
-        isError: true,
-        killedByContainer: true,
-      });
-
-      res.status(500).json(result);
-    }, req.body.timeoutMs);
-  }
-
-  // define convert pdf to jpg function
-  function convertPdfToJPGJob() {
-    // convert pdf to images
-    var convertjob = child_process.spawn(
-      "python",
-      ["./scripts/pdf-2-image.py"],
-      {
-        cwd: __dirname,
-      }
-    );
-
-    convertjob.on("error", console.error);
-
-    convertjob.on("close", async function (exitCode) {
+    if (!fs.existsSync(imagesDir)) {
+      fs.mkdirSync(imagesDir);
+    }
+    // cleanup code
+    res.on("finish", function () {
       try {
-        clearTimeout(timeoutCheck);
+        fs.emptyDirSync(uploadDir);
+        fs.emptyDirSync(imagesDir);
+      } catch (err) {
+        console.error(err);
+      }
+    });
 
-        const result = {
-          isError: exitCode != 0,
-        };
+    // Timeout logic
+    var timeoutCheck;
 
-        if (result.isError) {
-          res.status(500).json(result);
-        } else {
-          const zip = new JSZip();
+    if (req.body.timeout) {
+      timeoutCheck = setTimeout(function () {
+        console.error("Process timed out. Killing");
 
-          // read the saved (jpg) image files
-          const fileNames = await fs.promises.readdir(
-            path.join(__dirname, "images"),
-            ["**.jpg"]
-          );
+        job.kill("SIGKILL");
 
-          fileNames.forEach(function (filename) {
-            const filepath = path.join(__dirname, "images", filename);
+        var result = _.extend(output, {
+          timedOut: true,
+          isError: true,
+          killedByContainer: true,
+        });
 
-            const data = fs.readFileSync(filepath);
+        res.status(500).json(result);
+      }, Number(req.body.timeout));
+    }
 
-            // append files to zip
-            zip.file(filename, data);
-          });
+    // define convert pdf to jpg function
+    function convertPdfToJPGJob() {
+      // convert pdf to images
+      var convertjob = child_process.spawn(
+        "python",
+        ["./scripts/pdf-2-image.py"],
+        {
+          cwd: __dirname,
+        }
+      );
 
-          zip.generateAsync({ type: "base64" }).then((base64) => {
-            let zip = Buffer.from(base64, "base64");
-            res.writeHead(200, {
-              "Content-Type": "application/zip",
-              "Content-disposition": `attachment; filename=images.zip`,
+      convertjob.on("error", console.error);
+
+      convertjob.on("close", async function (exitCode) {
+        try {
+          clearTimeout(timeoutCheck);
+
+          const result = {
+            isError: exitCode != 0,
+          };
+
+          if (result.isError) {
+            res.status(500).json(result);
+          } else {
+            const zip = new JSZip();
+
+            // read the saved (jpg) image files
+            const fileNames = await fs.promises.readdir(
+              path.join(__dirname, "images"),
+              ["**.jpg"]
+            );
+
+            fileNames.forEach(function (filename) {
+              const filepath = path.join(__dirname, "images", filename);
+
+              const data = fs.readFileSync(filepath);
+
+              // append files to zip
+              zip.file(filename, data);
             });
 
-            res.end(zip);
-          });
+            zip.generateAsync({ type: "base64" }).then((base64) => {
+              let zip = Buffer.from(base64, "base64");
+              res.writeHead(200, {
+                "Content-Type": "application/zip",
+                "Content-disposition": `attachment; filename=images.zip`,
+              });
+
+              res.end(zip);
+            });
+          }
+        } catch (err) {
+          console.error("err on close: ", err);
         }
-      } catch (err) {
-        console.error("err on close: ", err);
+      });
+    }
+
+    // if the uploaded file is already a pdf, convert to jpg
+    if (req.file.mimetype === "application/pdf") {
+      convertPdfToJPGJob();
+      return;
+    }
+
+    try {
+      // if the provided file is e.g. MS DOCS, convert to pdf first then jpg
+      const files = fs.readdirSync(path.join(__dirname, "/uploads"));
+
+      for (let i = 0; i < files.length; i += 1) {
+        const file = files[i];
+
+        // TODO: enhance this check to include all office documents
+        if (path.extname(file) !== "pdf") {
+          const inputPath = path.join(__dirname, `/uploads/${file}`);
+
+          const outputPath = path.join(
+            __dirname,
+            `/uploads/${path.parse(file).name}.pdf`
+          );
+
+          // read file
+          const docxBuf = await fs.promises.readFile(inputPath);
+
+          // convert it to pdf format with undefined filter (see Libreoffice docs about filter)
+          const pdfBuf = await libre.convertAsync(docxBuf, ".pdf", undefined);
+
+          // here in done you have pdf file which you can save or transfer in another stream
+          await fs.writeFile(outputPath, pdfBuf);
+
+          convertPdfToJPGJob();
+        }
       }
-    });
+    } catch (err) {
+      const result = {
+        isError: exitCode != 0,
+        error: err,
+      };
+
+      res.status(500).json(result);
+    }
   }
-
-  // if the uploaded file is already a pdf, convert to jpg
-  if (req.file.mimetype === "application/pdf") {
-    convertPdfToJPGJob();
-    return;
-  }
-
-  // if the provided file is e.g. MS DOCS, convert to pdf first then jpg
-  fs.readdir(path.join(__dirname, "/uploads"), (err, files) => {
-    files.forEach(async (file) => {
-      // TODO: enhance this check to include all office documents
-      if (path.extname(file) !== "pdf") {
-        const inputPath = path.join(__dirname, `/uploads/${file}`);
-
-        const outputPath = path.join(
-          __dirname,
-          `/uploads/${path.parse(file).name}.pdf`
-        );
-
-        // read file
-        const docxBuf = await fs.promises.readFile(inputPath);
-
-        // convert it to pdf format with undefined filter (see Libreoffice docs about filter)
-        const pdfBuf = await libre.convertAsync(docxBuf, ".pdf", undefined);
-
-        // here in done you have pdf file which you can save or transfer in another stream
-        await fs.writeFile(outputPath, pdfBuf);
-
-        convertPdfToJPGJob();
-      }
-    });
-  });
-});
+);
 
 app.listen(port, function () {
   console.log("Container service running on port " + port);
