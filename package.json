@@ -1,6 +1,6 @@
 {
   "name": "@mr.physics/docker-sandbox",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A docker-based sandbox to execute untrusted python code",
   "main": "./lib/Sandbox",
   "scripts": {
